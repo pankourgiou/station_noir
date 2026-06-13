@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Choir Below</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital@0;1&family=Special+Elite&display=swap');
+
+  body {
+    background: #0d0d0d;
+    color: #c9c5bd;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  #game {
+    max-width: 680px;
+    width: 100%;
+  }
+  h1 {
+    font-family: 'Special Elite', 'Courier New', monospace;
+    font-size: 22px;
+    font-weight: normal;
+    letter-spacing: 4px;
+    color: #8a8579;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #555;
+    margin-bottom: 1.25rem;
+    text-transform: uppercase;
+  }
+  .stats {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: #161616;
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 11px;
+    border: 1px solid #2a2a2a;
+    color: #877;
+    letter-spacing: 1px;
+  }
+  .stat span { color: #c9c5bd; }
+  #textbox {
+    background: linear-gradient(180deg, #141414 0%, #111 100%);
+    border: 1px solid #2a2a2a;
+    border-left: 3px solid #4a4339;
+    border-radius: 2px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.9;
+    font-size: 15px;
+    min-height: 220px;
+    white-space: pre-wrap;
+    position: relative;
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.5);
+  }
+  #textbox::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, transparent 1px, transparent 2px, rgba(255,255,255,0.015) 3px);
+    pointer-events: none;
+    border-radius: 2px;
+  }
+  #text {
+    position: relative;
+    z-index: 1;
+  }
+  .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: #c9c5bd;
+    margin-left: 2px;
+    vertical-align: -2px;
+    animation: blink 0.9s step-end infinite;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+  #choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 40px;
+  }
+  button {
+    background: #161616;
+    color: #b8b4ac;
+    border: 1px solid #333;
+    border-left: 3px solid #4a4339;
+    border-radius: 2px;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-align: left;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.4s ease, background 0.15s ease, border-left-color 0.15s ease;
+  }
+  button.visible {
+    opacity: 1;
+  }
+  button:hover {
+    background: #1e1e1e;
+    border-left-color: #8a8579;
+  }
+  button:active {
+    transform: scale(0.99);
+  }
+  .ending {
+    background: #161616;
+    border-left: 3px solid #4a4339;
+    border-radius: 2px;
+    padding: 1rem 1.25rem;
+    font-size: 13px;
+    color: #877;
+    line-height: 1.8;
+    font-style: italic;
+    opacity: 0;
+    animation: fadein 1s ease forwards;
+  }
+  @keyframes fadein {
+    to { opacity: 1; }
+  }
+  .skip-hint {
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 1px;
+    margin-top: 6px;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <h1>The Choir Below</h1>
+  <div class="subtitle">a station noir — chapter one</div>
+
+  <div class="stats">
+    <div class="stat">NORDIC <span id="s-nordic">0</span></div>
+    <div class="stat">REPTILIAN <span id="s-rept">0</span></div>
+    <div class="stat">GREY <span id="s-grey">0</span></div>
+    <div class="stat">INSECTOID <span id="s-insect">0</span></div>
+    <div class="stat">CORRUPTION <span id="s-corrupt">0</span></div>
+  </div>
+
+  <div id="textbox">
+    <div id="text"></div>
+  </div>
+  <div id="choices"></div>
+  <div class="skip-hint" id="skiphint">click anywhere to skip typing</div>
+</div>
+
+<script>
+const state = { nordic:0, rept:0, grey:0, insect:0, corrupt:0 };
+let typing = false;
+let skipRequested = false;
+
+function render(){
+  document.getElementById('s-nordic').textContent = state.nordic;
+  document.getElementById('s-rept').textContent = state.rept;
+  document.getElementById('s-grey').textContent = state.grey;
+  document.getElementById('s-insect').textContent = state.insect;
+  document.getElementById('s-corrupt').textContent = state.corrupt;
+}
+
+document.body.addEventListener('click', () => {
+  if(typing) skipRequested = true;
+});
+
+function typeText(str, callback){
+  const textEl = document.getElementById('text');
+  textEl.innerHTML = '';
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+
+  typing = true;
+  skipRequested = false;
+  let i = 0;
+
+  function step(){
+    if(skipRequested){
+      textEl.textContent = str;
+      typing = false;
+      cursor.remove();
+      callback();
+      return;
+    }
+    if(i < str.length){
+      textEl.textContent = str.slice(0, i+1);
+      textEl.appendChild(cursor);
+      i++;
+      const ch = str[i-1];
+      let delay = 18;
+      if(ch === '.' || ch === '!' || ch === '?') delay = 280;
+      else if(ch === ',') delay = 120;
+      else if(ch === '\\n') delay = 200;
+      setTimeout(step, delay);
+    } else {
+      typing = false;
+      cursor.remove();
+      callback();
+    }
+  }
+  step();
+}
+
+const nodes = {
+  start: {
+    text: "The rain never stops on Tertius Dock — recycled condensation, weeping down the bulkheads in slow grey ribbons, like the station itself is sweating out its own age.\n\nI'm Vane. Used to carry a real badge, back when the Coalition still pretended jurisdiction out here. Now I take the cases the precincts won't touch — the ones that smell wrong from the first page of the file.\n\nThis one smells like every kind of wrong at once.\n\nDr. Ilsa Korr. Grey corporate scientist, mid-tier clearance, model citizen right up until three nights ago, when she walked out of her lab in the Spire and didn't walk back in. Her last transmission was four seconds of static and one phrase, repeated twice, in a voice that wasn't quite hers:\n\n'The Choir is waking.'\n\nFour alien quarters carve up this station — Nordic, Reptilian, Grey, Insectoid — and every one of them has a reason to lie to me. I light a cigarette I can't afford and head for the Grey sector. Might as well start where the trouble started.",
+    choices: [
+      {label:"Enter the Grey corporate sector", next:"grey1"},
+      {label:"Detour through the Reptilian dens first — let the rumor mill run ahead of you", next:"rept1"}
+    ]
+  },
+
+  grey1: {
+    text: "The Grey sector doesn't have weather. It has climate control, and it's set to a temperature designed to make you feel like an error in the system.\n\nEverything here is the colour of old bone — walls, floors, the receptionist's skin, her eyes. Especially her eyes. No pupil, no white, just two flat discs that track me like gun sights.\n\n'Detective Vane.' Not a question. 'Dr. Korr's research falls under tier-four containment. Access requires payment, or an escalation to her supervisor — who has declined three requests already this week.'\n\nShe says it like she's done me a favour by mentioning the second option at all.",
+    choices: [
+      {label:"Pay the access fee — keep this clean", next:"grey2", effect:{grey:1}},
+      {label:"Push past her and force the supervisor's hand", next:"grey2b", effect:{grey:-1, corrupt:1}}
+    ]
+  },
+
+  grey2: {
+    text: "The credits leave my account with a sound like a held breath. The file unlocks — mostly black bars, a few surviving fragments.\n\n'PROJECT CHOIR — resonance cartography, sub-level architecture, pre-Collapse origin. Subject expresses growing... personal investment. Recommend reassignment.' Someone flagged Korr as compromised. Nobody reassigned her.\n\nOne line escapes the redaction entirely, scrawled in the margin in handwriting that isn't corporate at all — cramped, urgent, almost clawed into the page:\n\n'They sing in the walls. Ask the Hive. Ask before it answers itself.'\n\nThe cigarette's gone out. I don't remember it going out.",
+    choices: [
+      {label:"Take the lead to the Insectoid docks", next:"insect1"},
+      {label:"The Nordics collect pre-Collapse relics — try them first", next:"nordic1"}
+    ]
+  },
+
+  grey2b: {
+    text: "I don't wait for an escort. The supervisor's office is three doors down, and the door doesn't lock — Greys don't believe in locks, they believe in being watched instead.\n\nHe's small, even for a Grey, folded behind a desk with nothing on it. He doesn't startle. He doesn't do anything for a long moment, which is somehow worse.\n\n'You should not be here.'\n\n'And Korr should still be here. Funny how that works out.'\n\nSomething in his stillness shifts — not fear exactly, but recalculation. He pushes a single data chip across the desk without a word, like he's paying a toll to make me leave faster. 'Project Choir. That is everything. Now go, before this room remembers you were in it.'\n\nThat last part wasn't a metaphor. I leave fast.",
+    choices: [
+      {label:"Take the lead to the Insectoid docks", next:"insect1"},
+      {label:"Try the Nordic quarter instead", next:"nordic1"}
+    ]
+  },
+
+  rept1: {
+    text: "The Reptilian dens are loud in a way the rest of the station forgot how to be — wet neon-less light, the click and hiss of a dozen dialects, the smell of fried protein and cheap synth-spirit.\n\nSszar finds me before I find him, which is how he likes it. Old debts, his and mine, tangled enough that neither of us bothers counting anymore.\n\n'Vane. Heard you caught the Korr case.' He doesn't ask how I know he knows. 'She was down here, four days back. Buying maps. Old ones — pre-Collapse schematics, the kind that show decks that aren't in any current registry. Paid in Nordic chits.'\n\nHis claws click against the table, laying one of those chits down between us. 'Nordics don't deal down here. Not for anything small. Whatever Korr was chasing, someone up top wanted her to find it.'",
+    choices: [
+      {label:"Pocket the chit — head to the Nordic quarter", next:"nordic1", effect:{rept:1}},
+      {label:"Leave the chit on the table — it's bait, and you know it", next:"rept2", effect:{rept:1}}
+    ]
+  },
+
+  rept2: {
+    text: "I don't touch it. Sszar watches me not touch it, and something like respect crosses his face — or maybe it's disappointment that I didn't bite.\n\n'Careful little human.' He pockets the chit himself. 'Suit yourself. But somebody wanted that found, and now they know it wasn't you that found it. That's its own kind of message.'\n\nFine. I'll send my own message back — the slow way. The Insectoid dockworkers see everything that moves through the lower decks. If Korr came through here chasing 'the Choir', they'll have felt her go.",
+    choices: [
+      {label:"Head down to the Insectoid docks", next:"insect1"}
+    ]
+  },
+
+  insect1: {
+    text: "Heat hits first — the Hive-docks run twenty degrees warmer than anywhere else on station, thick with a low collective hum that isn't quite sound. It's underneath sound. In your teeth.\n\nThousands of Insectoid workers move in patterns too smooth to be individual, and one of them peels away to meet me — what they call a 'voice', a single worker temporarily speaking for the whole.\n\n'We remember her.' The voice's compound eyes catch the tunnel-light in a hundred small reflections of my own face. 'The Grey came seeking the old songs. The resonance the First Builders left in the bones of this station, before the Collapse, before any of us. She believed the songs could open what was sealed.'\n\nA pause. The hum around us drops, just slightly — like a held breath, a thousand bodies wide.\n\n'We told her: some songs are doors. Some doors are warnings. She did not listen. Three nights ago, her footsteps stopped. We have not felt them since — and the walls have been... quieter, since. Wrong-quiet.'",
+    choices: [
+      {label:"Ask the Hive to take you to the sealed level", next:"insect2"},
+      {label:"This sounds like a very bad idea — try the Nordics for another way in", next:"nordic1", effect:{insect:1}}
+    ]
+  },
+
+  insect2: {
+    text: "The voice is quiet long enough that I start to think I've been refused. Then: 'You humans. Always walking toward the thing that ate the last thing that walked toward it.'\n\nBut they move aside. Trust, here, isn't given — it's a gap opening in a wall of bodies, just wide enough for one.\n\nA young worker leads me through tunnels that get narrower, hotter, older — service corridors that predate the Hive's own records, walls scored with carvings that aren't Insectoid, aren't Nordic, aren't anything I recognize. They look almost like sheet music. Almost like screaming.\n\nAt the end: a bulkhead door, rusted the colour of dried blood, sealed with a mechanism that hasn't moved in longer than any species on this station has existed. And under the hum — under everything — I hear it.\n\nSinging. Very faint. Coming from the other side.",
+    end:true,
+    effect:{insect:2},
+    ending:"chapter1_insect"
+  },
+
+  nordic1: {
+    text: "The Nordic quarter doesn't have a temperature either, but it FEELS cold — white marble, vaulted ceilings built for beings that used to be looked up to, literally, by entire civilizations that no longer exist to remember why.\n\nAn attendant receives me in a room designed to make visitors feel like an afterthought. Pale, tall, ancient-eyed. 'Detective Vane. We wondered when you'd arrive.'\n\nOf course they did.\n\n'Dr. Korr came to us tracing a bloodline — the First Builders. We assumed, given your species' rather brief tenure in the historical record, that the name would mean nothing to you.'\n\nIt's said gently. That's what makes it land.",
+    choices: [
+      {label:"Let them underestimate you. Listen.", next:"nordic2", effect:{nordic:1}},
+      {label:"Drop the politeness — demand straight answers", next:"nordic2b", effect:{nordic:-1, corrupt:1}}
+    ]
+  },
+
+  nordic2: {
+    text: "I let it sit. Let them think the silence is ignorance instead of patience — it's an old trick, and it works on species a lot older than this one likes to admit.\n\n'The First Builders predate all four of our peoples' arrival here. Pre-Collapse records — what little survived — suggest they did not leave the station. They went quiet. Sealed themselves below, deliberately, and sealed the way down behind them.'\n\n'Dr. Korr theorized the Insectoid resonance-songs were the key — not metaphorically. Literally a key, encoded in sound. We granted her archive access. Partly curiosity.' A pause, careful as a blade laid flat. 'Partly because some of us have always believed the Builders never truly left. And that whatever they're guarding down there is worth considerably more than one scientist's grant.'\n\nThe attendant's ancient eyes don't blink. 'If you find her, detective — you may find what this entire station was built to stand on top of.'",
+    choices: [
+      {label:"Head for the Insectoid docks and the sealed level", next:"insect1"},
+      {label:"Ask the Nordics for a direct route — skip the Hive entirely", next:"nordic3", effect:{nordic:1}}
+    ]
+  },
+
+  nordic2b: {
+    text: "The attendant's expression doesn't change. That's the problem with Nordics — the mask doesn't crack, it just gets colder underneath, somewhere you can't see.\n\n'How... efficient of you.' They give me the shape of it, nothing more: First Builders, sealed level, Insectoid resonance-songs as the key. Then, politely, unmistakably, I am no longer welcome.\n\nNordic trust drops a notch. They don't forget rudeness. They just file it, and wait.\n\nStill — I have what I need.",
+    choices: [
+      {label:"Head for the Insectoid docks", next:"insect1"}
+    ]
+  },
+
+  nordic3: {
+    text: "The attendant considers this with the unhurried patience of something that has outlived several governments. Then they produce a slim data-key — coordinates, a maintenance route, decades out of date but still, apparently, walkable.\n\n'The Hive would have made you ask. Sing the old songs, observe the old courtesies. We find that...' a pause, the closest thing to distaste this species shows, '...tedious.'\n\nIt's the fast way down. It's also, I realize too late, a door closing somewhere else — the Hive will hear, eventually, that I went around them. Some debts you don't get to pay later.\n\nThe maintenance route ends at a bulkhead door the colour of dried blood. Carvings cover its surface — something between sheet music and a scream. And underneath the silence of this forgotten corridor, very faint:\n\nSinging. Coming from the other side.",
+    end:true,
+    effect:{nordic:2, insect:-1},
+    ending:"chapter1_nordic"
+  }
+};
+
+const endings = {
+  chapter1_insect: "End of chapter one. You stand at the sealed door with the Hive's blessing at your back — the collective remembers a human who asked before taking. Whatever wakes on the other side, you won't face it as a trespasser.\n\n...the singing gets louder.",
+  chapter1_nordic: "End of chapter one. You stand at the sealed door, Nordic coordinates burning a hole in your pocket, having walked straight past the Hive without a word. Efficient. The Insectoids will remember the silence where a request should have been — and in the dark below, trust may be the only currency that still works.\n\n...the singing gets louder."
+};
+
+function applyEffect(effect){
+  if(!effect) return;
+  for(const k in effect){ state[k] = (state[k]||0) + effect[k]; }
+}
+
+function showNode(key){
+  const node = nodes[key];
+  const choicesEl = document.getElementById('choices');
+  const skipHint = document.getElementById('skiphint');
+  choicesEl.innerHTML = '';
+  skipHint.style.opacity = '1';
+
+  typeText(node.text, () => {
+    skipHint.style.opacity = '0';
+
+    if(node.end){
+      applyEffect(node.effect);
+      render();
+      const endDiv = document.createElement('div');
+      endDiv.className = 'ending';
+      endDiv.textContent = endings[node.ending];
+      choicesEl.appendChild(endDiv);
+      return;
+    }
+
+    node.choices.forEach((choice, idx) => {
+      const btn = document.createElement('button');
+      btn.textContent = choice.label;
+      btn.onclick = () => {
+        applyEffect(choice.effect);
+        render();
+        showNode(choice.next);
+      };
+      choicesEl.appendChild(btn);
+      setTimeout(() => btn.classList.add('visible'), idx * 150);
+    });
+  });
+}
+
+render();
+showNode('start');
+</script>
+</body>
+</html>
